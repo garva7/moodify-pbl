@@ -1,10 +1,10 @@
-from flask import Flask, request, jsonify #web framework for API
+from flask import Flask, request, jsonify #web framework for python
 import spotipy #python client for Spotify API
 from spotipy.oauth2 import SpotifyClientCredentials
-import os #loads api keys securely from .env
+import os #loads api keys securely from .env file, and other env vars
 import json #for analyzing AI's JSON responses
 import re
-from dotenv import load_dotenv 
+from dotenv import load_dotenv #load variables from .env file
 from groq import Groq 
 
 load_dotenv()
@@ -18,6 +18,7 @@ sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
     client_secret=os.getenv("SPOTIFY_CLIENT_SECRET")
 ))
 
+#nlp using spaCy
 
 # ── BPM ranges mapped to energy level ──
 # This is what we use to FILTER tracks after getting features
@@ -217,14 +218,12 @@ def recommend():
         print(f"Artist: {artist} | Mood: {mood} | Energy: {energy} | BPM target: {BPM_RANGES[energy]}")
 
         # Step 2: Build Spotify query
-        # We run 2 searches and combine — one normal, one with "rare" offset
-        # to get beyond just the top hits
         all_tracks = []
         seen_ids = set()
 
         if artist:
             queries = [f"artist:{artist}", f"artist:{artist}"]
-            offsets = [0, 20]  # second search starts at offset 20 = deeper cuts
+            offsets = [0, 20] 
         else:
             base_query = f"{mood} {genre} {context}".strip()
             queries = [base_query, f"{genre} {mood} underground", f"{genre} {context} indie"]
@@ -290,7 +289,7 @@ def recommend():
             "playlist": playlist
         })
 
-    except Exception as e:
+    except Exception as e:  
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
