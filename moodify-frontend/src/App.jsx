@@ -250,7 +250,7 @@ export default function App() {
     if (!input.trim()) return;
     setLoading(true); setError(null); setResult(null);
     try {
-      const res = await fetch("http://127.0.0.1:5000/recommend", {
+      const res = await fetch("https://moodify-backend.onrender.com/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: input }),
