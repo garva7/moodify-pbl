@@ -12,6 +12,8 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 from dotenv import load_dotenv
 from groq import Groq
+import requests
+from requests.adapters import HTTPAdapter
 
 # ── Silence Spotipy 403 spam ──────────────────────────────────────────────────
 logging.getLogger("spotipy").setLevel(logging.CRITICAL)
@@ -29,7 +31,9 @@ sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
     client_secret=os.getenv("SPOTIFY_CLIENT_SECRET")
 ), requests_timeout=5
 )
-
+adapter = HTTPAdapter(max_retries=0)
+sp._session.mount("http://", adapter)
+sp._session.mount("https://", adapter)
 # ── Constants ─────────────────────────────────────────────────────────────────
 BPM_RANGES = {
     "low":    (50,  85),
