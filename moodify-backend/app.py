@@ -23,7 +23,8 @@ app    = Flask(__name__)
 CORS(app)
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-sp     = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
+
+sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
     client_id=os.getenv("SPOTIFY_CLIENT_ID"),
     client_secret=os.getenv("SPOTIFY_CLIENT_SECRET")
 ))
@@ -258,8 +259,8 @@ def fetch_audio_features_safe(track_ids: list, energy_level: str) -> dict:
             uncached.append(tid)
 
     # Fetch uncached in batches of 20
-    for i in range(0, len(uncached), 20):
-        batch   = uncached[i:i + 20]
+    for i in range(0, len(uncached), 5):
+        batch   = uncached[i:i + 5]
         fetched = None
 
         for attempt in range(3):
@@ -267,7 +268,8 @@ def fetch_audio_features_safe(track_ids: list, energy_level: str) -> dict:
                 spotify_bucket.acquire()
                 fetched = sp.audio_features(batch)
                 break
-            except Exception:
+            except Exception as e:
+                print("Spotify error:", e)
                 time.sleep(0.5 * (attempt + 1))
 
         result_list = fetched if fetched else [None] * len(batch)
