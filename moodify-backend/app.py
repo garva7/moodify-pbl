@@ -27,7 +27,8 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
     client_id=os.getenv("SPOTIFY_CLIENT_ID"),
     client_secret=os.getenv("SPOTIFY_CLIENT_SECRET")
-))
+), requests_timeout=5
+)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 BPM_RANGES = {
@@ -363,7 +364,7 @@ def recommend():
         seen_ids   = set()
 
         for query in queries:
-            for offset in [0, 10    ]:
+            for offset in [0, 10]:
                 try:
                     spotify_bucket.acquire()
                     results = sp.search(
