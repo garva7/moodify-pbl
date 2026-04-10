@@ -247,24 +247,41 @@ export default function App() {
   const resultsRef = useRef(null);
 
   const handleGenerate = async () => {
-    if (!input.trim()) return;
-    setLoading(true); setError(null); setResult(null);
-    try {
-      const res = await fetch("https://moodify-backend.onrender.com/recommend", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: input }),
-      });
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
-      const data = await res.json();
-      setResult(data);
-      setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
-    } catch (err) {
-      setError(err.message || "Something went wrong. Is your backend running?");
-    } finally {
-      setLoading(false);
+  if (!input.trim()) return;
+
+  setLoading(true);
+  setError(null);
+  setResult(null);
+
+  try {
+    const res = await fetch("https://moodify-pbl-production.up.railway.app/recommend", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ prompt: input }), 
+    });
+
+    if (!res.ok) {
+      throw new Error(`Server error: ${res.status}`);
     }
-  };
+
+    const data = await res.json();
+    setResult(data);
+
+    setTimeout(() => {
+      resultsRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 300);
+
+  } catch (err) {
+    setError(err.message || "Something went wrong. Is your backend running?");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleShare = () => {
     if (!result?.playlist_id) return;
