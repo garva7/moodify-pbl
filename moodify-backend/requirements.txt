@@ -1,7 +1,6 @@
 flask
+flask-cors
 spotipy
 python-dotenv
-openai
-requests
 groq
 gunicorn
