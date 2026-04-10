@@ -247,10 +247,9 @@ Return ONLY a JSON array of 9 query strings. No explanation.
 # =============================================================================
 def fetch_audio_features_safe(track_ids: list, energy_level: str) -> dict:
     global _feature_cache
-    defaults     = DEFAULT_FEATURES[energy_level]
+    defaults = DEFAULT_FEATURES[energy_level]
     features_map = {}
 
-    # Return cached entries immediately
     uncached = []
     for tid in track_ids:
         if tid in _feature_cache:
@@ -258,31 +257,27 @@ def fetch_audio_features_safe(track_ids: list, energy_level: str) -> dict:
         else:
             uncached.append(tid)
 
-    # Fetch uncached in batches of 20
-    for i in range(0, len(uncached), 5):
-        batch   = uncached[i:i + 5]
-        fetched = None
+    # ✅ VERY SMALL batches
+    for i in range(0, len(uncached), 3):
+        batch = uncached[i:i + 3]
 
-        for attempt in range(3):
-            try:
-                spotify_bucket.acquire()
-                fetched = sp.audio_features(batch)
-                break
-            except Exception as e:
-                print("Spotify error:", e)
-                time.sleep(0.5 * (attempt + 1))
+        try:
+            spotify_bucket.acquire()
+            fetched = sp.audio_features(batch)
+        except Exception as e:
+            print("Spotify error:", e)
+            fetched = [None] * len(batch)  # ✅ NO RETRY
 
-        result_list = fetched if fetched else [None] * len(batch)
-        for tid, f in zip(batch, result_list):
+        for tid, f in zip(batch, fetched):
             entry = {
-                "tempo":   f.get("tempo",   defaults["tempo"])   if f else defaults["tempo"],
-                "energy":  f.get("energy",  defaults["energy"])  if f else defaults["energy"],
+                "tempo": f.get("tempo", defaults["tempo"]) if f else defaults["tempo"],
+                "energy": f.get("energy", defaults["energy"]) if f else defaults["energy"],
                 "valence": f.get("valence", defaults["valence"]) if f else defaults["valence"],
             }
-            features_map[tid]   = entry
-            _feature_cache[tid] = entry   # update in-memory cache
+            features_map[tid] = entry
+            _feature_cache[tid] = entry
 
-    save_cache(_feature_cache)   # flush to disk after each request
+    save_cache(_feature_cache)
     return features_map
 
 
