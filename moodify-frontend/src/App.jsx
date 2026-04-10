@@ -259,7 +259,7 @@ export default function App() {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ prompt: input }), 
+      body: JSON.stringify({ text: input }), 
     });
 
     if (!res.ok) {

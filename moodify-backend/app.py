@@ -265,7 +265,6 @@ def fetch_audio_features_safe(track_ids: list, energy_level: str) -> dict:
             spotify_bucket.acquire()
             fetched = sp.audio_features(batch)
         except Exception as e:
-            print("Spotify error:", e)
             fetched = [None] * len(batch)  # ✅ NO RETRY
 
         for tid, f in zip(batch, fetched):
