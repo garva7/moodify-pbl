@@ -150,33 +150,9 @@ npm run dev
 
 ---
 
-## 🌐 Deployment
-
-### Backend (Railway)
-
-* Add environment variables
-* Start command:
-
-```bash
-gunicorn app:app --timeout 120
-```
-
----
-
-### Frontend (Vercel)
-
-Add environment variable:
-
-```env
-VITE_API_URL=https://your-backend-url
-```
-
----
-
 ## 🚨 Known Issues
 
 * Spotify API may return **403 errors** under heavy load
-* External API failures are handled with fallback defaults
 * Large requests may slightly increase response time
 
 ---
@@ -187,12 +163,6 @@ VITE_API_URL=https://your-backend-url
 * User authentication + saved playlists
 * ML-based recommendation refinement
 * Real-time Spotify playback sync
-
----
-
-## 💼 Resume Description
-
-Built an AI-powered music recommendation system using LLaMA 3 and Spotify API, featuring dynamic query generation, token-bucket rate limiting, audio feature caching, and explainable recommendations, with a modern React frontend and shareable playlists.
 
 ---
 
