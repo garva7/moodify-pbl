@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-// ─── Animated Gradient Background ────────────────────────────────────────────
 function AnimatedBackground() {
   return (
     <div className="fixed inset-0 -z-10 overflow-hidden">
@@ -35,10 +34,9 @@ function AnimatedBackground() {
   );
 }
 
-// ─── Sound Wave ───────────────────────────────────────────────────────────────
 function SoundWave({ active }) {
   return (
-    <div className="flex items-center justify-center gap-[3px] h-10 overflow-hidden">
+    <div className="flex items-center pt-[40px] justify-center gap-[3px] h-10 overflow-hidden">
       {Array.from({ length: 12 }).map((_, i) => (
         <motion.div
           key={i}
@@ -52,7 +50,6 @@ function SoundWave({ active }) {
   );
 }
 
-// ─── Loading State ────────────────────────────────────────────────────────────
 const loadingPhrases = ["Feeling the vibe…", "Reading between the notes…", "Tuning into your emotion…", "Curating your sound…", "Almost there…"];
 function LoadingState() {
   const [idx, setIdx] = useState(0);
@@ -75,7 +72,6 @@ function LoadingState() {
   );
 }
 
-// ─── Insight Card ─────────────────────────────────────────────────────────────
 function InsightCard({ icon, label, value, color, delay }) {
   return (
     <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay, duration: 0.5 }}
@@ -89,25 +85,6 @@ function InsightCard({ icon, label, value, color, delay }) {
   );
 }
 
-// ─── "Why This Song?" Reason Tags ─────────────────────────────────────────────
-function ReasonTags({ reasons }) {
-  if (!reasons || reasons.length === 0) return null;
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "10px" }}>
-      {reasons.map((r, i) => (
-        <span key={i} style={{
-          fontSize: "0.62rem", padding: "3px 8px", borderRadius: "99px",
-          background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)",
-          color: "#c4b5fd", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap",
-        }}>
-          {r}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-// ─── Spotify Embed Modal ──────────────────────────────────────────────────────
 function SpotifyEmbed({ spotifyId, onClose }) {
   return (
     <motion.div
@@ -137,7 +114,6 @@ function SpotifyEmbed({ spotifyId, onClose }) {
   );
 }
 
-// ─── Song Card ────────────────────────────────────────────────────────────────
 function SongCard({ song, index, onEmbed }) {
   const [hovered, setHovered] = useState(false);
 
@@ -154,33 +130,24 @@ function SongCard({ song, index, onEmbed }) {
         boxShadow: hovered ? "0 0 40px rgba(124,58,237,0.25), 0 20px 40px rgba(0,0,0,0.4)" : "0 4px 24px rgba(0,0,0,0.3)",
         transition: "box-shadow 0.3s ease", minWidth: "220px", maxWidth: "260px", flex: "0 0 auto",
       }}>
-
-      {/* Album art */}
       <div style={{ width: "100%", height: "176px", position: "relative", overflow: "hidden", background: "rgba(255,255,255,0.03)" }}>
         {song.image_url && (
           <img src={song.image_url} alt={song.song_name}
             style={{ width: "100%", height: "176px", objectFit: "cover", transition: "transform 0.4s ease", transform: hovered ? "scale(1.1)" : "scale(1)" }} />
         )}
-
         <AnimatePresence>
           {hovered && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", gap: "12px" }}>
-
-              {/* ▶ Embed / full play button */}
               <motion.button
                 initial={{ scale: 0.7 }} animate={{ scale: 1 }} whileHover={{ scale: 1.12 }} whileTap={{ scale: 0.93 }}
                 onClick={() => onEmbed(song.spotify_id)}
-                title="Play full track"
                 style={{ width: "54px", height: "54px", borderRadius: "50%", border: "none", background: "#1db954", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 0 24px rgba(29,185,84,0.55)", color: "#000", fontSize: "20px", fontWeight: "bold" }}>
                 ▶
               </motion.button>
-
-              {/* Spotify icon button */}
               <motion.button
                 initial={{ scale: 0.7 }} animate={{ scale: 1 }} whileHover={{ scale: 1.12 }} whileTap={{ scale: 0.93 }}
                 onClick={() => window.open(song.spotify_url, "_blank")}
-                title="Open in Spotify app"
                 style={{ width: "42px", height: "42px", borderRadius: "50%", border: "1px solid rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.1)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="#1db954">
                   <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
@@ -189,21 +156,14 @@ function SongCard({ song, index, onEmbed }) {
             </motion.div>
           )}
         </AnimatePresence>
-
         <div style={{ position: "absolute", top: "10px", left: "10px", width: "28px", height: "28px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: "600", background: "rgba(0,0,0,0.55)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff" }}>
           {index + 1}
         </div>
       </div>
-
-      {/* Info */}
       <div style={{ padding: "14px 16px 16px" }}>
         <div style={{ fontSize: "0.88rem", fontWeight: 600, color: "#fff", fontFamily: "'DM Sans', sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: "3px" }}>{song.song_name}</div>
         <div style={{ fontSize: "0.76rem", color: "rgba(255,255,255,0.5)", fontFamily: "'DM Sans', sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: "2px" }}>{song.artist}</div>
-        <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.28)", fontFamily: "'DM Sans', sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: "10px" }}>{song.album}</div>
-
-        {/* "Why this song?" reason tags */}
-        <ReasonTags reasons={song.reasons} />
-
+        <div style={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.28)", fontFamily: "'DM Sans', sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: "12px" }}>{song.album}</div>
         <motion.a href={song.spotify_url} target="_blank" rel="noopener noreferrer"
           whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
           style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", width: "100%", padding: "8px", borderRadius: "10px", fontSize: "0.73rem", fontWeight: 600, color: "#3670ce", background: "rgb(3,0,2)", border: "1px solid rgba(36,27,103,0.65)", fontFamily: "'DM Sans', sans-serif", textDecoration: "none" }}>
@@ -217,7 +177,6 @@ function SongCard({ song, index, onEmbed }) {
   );
 }
 
-// ─── Share Toast ──────────────────────────────────────────────────────────────
 function ShareToast({ visible, onClose }) {
   useEffect(() => {
     if (visible) { const t = setTimeout(onClose, 3000); return () => clearTimeout(t); }
@@ -234,7 +193,6 @@ function ShareToast({ visible, onClose }) {
   );
 }
 
-// ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [input, setInput]         = useState("");
   const [loading, setLoading]     = useState(false);
@@ -245,43 +203,31 @@ export default function App() {
   const [showToast, setShowToast] = useState(false);
   const inputRef   = useRef(null);
   const resultsRef = useRef(null);
+  const scrollRef  = useRef(null);
+
+  const scroll = (dir) => {
+    scrollRef.current?.scrollBy({ left: dir * 300, behavior: "smooth" });
+  };
 
   const handleGenerate = async () => {
-  if (!input.trim()) return;
-
-  setLoading(true);
-  setError(null);
-  setResult(null);
-
-  try {
-    const res = await fetch("https://moodify-pbl-production.up.railway.app/recommend", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ text: input }), 
-    });
-
-    if (!res.ok) {
-      throw new Error(`Server error: ${res.status}`);
-    }
-
-    const data = await res.json();
-    setResult(data);
-
-    setTimeout(() => {
-      resultsRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
+    if (!input.trim()) return;
+    setLoading(true); setError(null); setResult(null);
+    try {
+      const res = await fetch("http://127.0.0.1:5000/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: input }),
       });
-    }, 300);
-
-  } catch (err) {
-    setError(err.message || "Something went wrong. Is your backend running?");
-  } finally {
-    setLoading(false);
-  }
-};
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const data = await res.json();
+      setResult(data);
+      setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
+    } catch (err) {
+      setError(err.message || "Something went wrong. Is your backend running?");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleShare = () => {
     if (!result?.playlist_id) return;
@@ -302,16 +248,40 @@ export default function App() {
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
         .scroll-hide::-webkit-scrollbar { display: none; }
         .scroll-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .arrow-btn {
+          position: absolute;
+          top: 50%;
+          transform: translateY(-50%);
+          z-index: 10;
+          width: 48px;
+          height: 48px;
+          border-radius: 50%;
+          border: 1px solid rgba(255,255,255,0.2);
+          background: rgba(0,0,0,0.75);
+          backdrop-filter: blur(10px);
+          color: #fff;
+          font-size: 22px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.2s ease, box-shadow 0.2s ease;
+        }
+        .arrow-btn:hover {
+          background: rgba(124,58,237,0.6);
+          box-shadow: 0 0 20px rgba(124,58,237,0.4);
+        }
+        .arrow-btn:active {
+          background: rgba(124,58,237,0.8);
+        }
       `}</style>
 
       <AnimatedBackground />
 
-      {/* Spotify Embed Modal */}
       <AnimatePresence>
         {embedId && <SpotifyEmbed spotifyId={embedId} onClose={() => setEmbedId(null)} />}
       </AnimatePresence>
 
-      {/* Share Toast */}
       <ShareToast visible={showToast} onClose={() => setShowToast(false)} />
 
       <div style={{ minHeight: "100vh", color: "#fff", fontFamily: "'DM Sans', sans-serif" }}>
@@ -324,7 +294,7 @@ export default function App() {
             <span style={{ fontSize: "1.3rem", fontWeight: 800, fontFamily: "'Syne', sans-serif", background: "linear-gradient(90deg, #fff, rgba(255,255,255,0.7))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Moodify</span>
           </div>
           <div style={{ display: "flex", gap: "10px" }}>
-            {["Discover", "Library"].map(item => (
+            {["Discover"].map(item => (
               <motion.button key={item} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }}
                 style={{ padding: "8px 20px", borderRadius: "99px", fontSize: "0.85rem", fontWeight: 500, background: item === "Discover" ? "rgba(124,58,237,0.2)" : "transparent", border: `1px solid ${item === "Discover" ? "rgba(124,58,237,0.5)" : "rgba(255,255,255,0.12)"}`, color: item === "Discover" ? "#a78bfa" : "rgba(255,255,255,0.6)", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
                 {item}
@@ -334,7 +304,7 @@ export default function App() {
         </motion.nav>
 
         {/* Hero */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "40px 24px 20px" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "40px 24px 60px" }}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
             style={{ fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.3em", color: "rgba(255,255,255,0.35)", display: "flex", alignItems: "center", gap: "12px", marginBottom: "28px", fontFamily: "'DM Sans', sans-serif" }}>
             <span style={{ width: "32px", height: "1px", background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.3))" }} />
@@ -447,11 +417,18 @@ export default function App() {
                       </div>
                     </motion.div>
 
-                    <div className="scroll-hide"
-                      style={{ display: "flex", gap: "16px", overflowX: "auto", padding: "20px 40px 24px", cursor: "grab" }}>
-                      {playlist.map((song, i) => (
-                        <SongCard key={song.spotify_id || i} song={song} index={i} onEmbed={setEmbedId} />
-                      ))}
+                    {/* Scroll with fixed arrows using pure CSS */}
+                    <div style={{ position: "relative" }}>
+                      <button className="arrow-btn" style={{ left: "8px" }} onClick={() => scroll(-1)}>←</button>
+
+                      <div ref={scrollRef} className="scroll-hide"
+                        style={{ display: "flex", gap: "16px", overflowX: "auto", padding: "20px 64px 24px", cursor: "grab" }}>
+                        {playlist.map((song, i) => (
+                          <SongCard key={song.spotify_id || i} song={song} index={i} onEmbed={setEmbedId} />
+                        ))}
+                      </div>
+
+                      <button className="arrow-btn" style={{ right: "8px" }} onClick={() => scroll(1)}>→</button>
                     </div>
                   </div>
                 )}

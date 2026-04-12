@@ -6,16 +6,15 @@ import os
 import re
 import uuid
 import threading
+import requests
+from requests.adapters import HTTPAdapter
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 from dotenv import load_dotenv
 from groq import Groq
-import requests
-from requests.adapters import HTTPAdapter
 
-# ── Silence Spotipy 403 spam ──────────────────────────────────────────────────
 logging.getLogger("spotipy").setLevel(logging.CRITICAL)
 logging.getLogger("urllib3").setLevel(logging.CRITICAL)
 
@@ -26,15 +25,18 @@ CORS(app)
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
-    client_id=os.getenv("SPOTIFY_CLIENT_ID"),
-    client_secret=os.getenv("SPOTIFY_CLIENT_SECRET")
-), requests_timeout=5
+sp = spotipy.Spotify(
+    auth_manager=SpotifyClientCredentials(
+        client_id=os.getenv("SPOTIFY_CLIENT_ID"),
+        client_secret=os.getenv("SPOTIFY_CLIENT_SECRET")
+    ),
+    requests_timeout=8
 )
+
 adapter = HTTPAdapter(max_retries=0)
 sp._session.mount("http://", adapter)
 sp._session.mount("https://", adapter)
-# ── Constants ─────────────────────────────────────────────────────────────────
+
 BPM_RANGES = {
     "low":    (50,  85),
     "medium": (85,  115),
@@ -50,22 +52,15 @@ CACHE_FILE  = "audio_features_cache.json"
 PLAYLIST_DB = "playlists_db.json"
 
 
-# =============================================================================
-#  1. TOKEN BUCKET  — proper rate-limit handling (replaces time.sleep)
-# =============================================================================
 class TokenBucket:
-    """
-    Allows `rate` tokens/second, burst up to `capacity`.
-    Thread-safe. Callers block only when the bucket is empty.
-    """
-    def __init__(self, capacity: float, rate: float):
-        self.capacity   = capacity
-        self.rate       = rate
-        self.tokens     = capacity
-        self.last_time  = time.monotonic()
-        self._lock      = threading.Lock()
+    def __init__(self, capacity, rate):
+        self.capacity  = capacity
+        self.rate      = rate
+        self.tokens    = capacity
+        self.last_time = time.monotonic()
+        self._lock     = threading.Lock()
 
-    def acquire(self, tokens: float = 1.0):
+    def acquire(self, tokens=1.0):
         with self._lock:
             now            = time.monotonic()
             elapsed        = now - self.last_time
@@ -78,15 +73,10 @@ class TokenBucket:
             time.sleep(wait)
             self.tokens = 0
 
-
-# 5 Spotify requests/sec, burst up to 10
 spotify_bucket = TokenBucket(capacity=10, rate=5)
 
 
-# =============================================================================
-#  2. AUDIO FEATURE CACHE  — JSON file, avoids repeated Spotify API hits
-# =============================================================================
-def load_cache() -> dict:
+def load_cache():
     if os.path.exists(CACHE_FILE):
         try:
             with open(CACHE_FILE, "r") as f:
@@ -95,20 +85,17 @@ def load_cache() -> dict:
             return {}
     return {}
 
-def save_cache(cache: dict):
+def save_cache(cache):
     try:
         with open(CACHE_FILE, "w") as f:
             json.dump(cache, f)
     except Exception:
         pass
 
-_feature_cache = load_cache()   # loaded once at startup
+_feature_cache = load_cache()
 
 
-# =============================================================================
-#  3. PLAYLIST DB  — for shareable links
-# =============================================================================
-def load_playlists() -> dict:
+def load_playlists():
     if os.path.exists(PLAYLIST_DB):
         try:
             with open(PLAYLIST_DB, "r") as f:
@@ -117,7 +104,7 @@ def load_playlists() -> dict:
             return {}
     return {}
 
-def save_playlist(playlist_id: str, data: dict):
+def save_playlist(playlist_id, data):
     db = load_playlists()
     db[playlist_id] = data
     try:
@@ -127,38 +114,28 @@ def save_playlist(playlist_id: str, data: dict):
         pass
 
 
-# =============================================================================
-#  Helpers
-# =============================================================================
-def parse_json_safe(text: str) -> dict:
+def parse_json_safe(text):
     text = re.sub(r"```(?:json)?\s*", "", text).strip().replace("```", "").strip()
     return json.loads(text)
 
 
-def is_artist_track(track: dict, artist_name: str) -> bool:
-    """Exact match — prevents 'Drake Williams' matching 'Drake'."""
+def is_artist_track(track, artist_name):
     target   = artist_name.lower().strip()
     credited = [a["name"].lower().strip() for a in track.get("artists", [])]
     for name in credited:
         if name == target:
             return True
-        if target in name.split() or name in target.split():
-            return True
     return False
 
 
-# =============================================================================
-#  4. LLM INTENT PARSING
-# =============================================================================
 def parse_request(user_text: str) -> dict:
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="llama-3.3-70b-versatile",  # ← back to 70b for parsing only
             messages=[
-                {"role": "system", "content": "Return only JSON."},
+                {"role": "system", "content": "Return only JSON. If the user mentions a music artist or band name, always set the artist field to that name."},
                 {"role": "user", "content": f"""
 Analyze: "{user_text}"
-
 Return:
 {{
   "artist": "name or null",
@@ -169,7 +146,8 @@ Return:
 }}
 """}
             ],
-            temperature=0
+            temperature=0,
+            max_tokens=150,
         )
         result = parse_json_safe(response.choices[0].message.content)
         if not result.get("artist") or str(result["artist"]).lower() in ("null", "none", ""):
@@ -182,10 +160,7 @@ Return:
                 "energy": "medium", "genre_hint": "pop"}
 
 
-# =============================================================================
-#  5. CONTEXT-AWARE QUERY EXPANSION via LLM  (replaces hardcoded templates)
-# =============================================================================
-def expand_queries(parsed: dict) -> list:
+def expand_queries(parsed):
     artist  = parsed.get("artist")
     mood    = parsed.get("mood", "general")
     context = parsed.get("context", "general")
@@ -194,68 +169,84 @@ def expand_queries(parsed: dict) -> list:
 
     try:
         if artist:
-            prompt = f"""
-You are a music curator. Generate 9 diverse Spotify search queries to find songs by or heavily featuring "{artist}".
-Include: studio albums, deep cuts, collaborations, features, live versions, and lesser-known tracks.
-Return ONLY a JSON array of 9 query strings. No explanation.
-Example: ["artist query 1", "artist query 2", ...]
-"""
+            prompt = f"""Give 8 short Spotify search queries to find songs by "{artist}" that match this vibe:
+            - Mood: {mood}
+            - Context: {context}  
+            - Energy: {energy}
+
+            Tailor every query to the mood/context/energy above.
+            Examples: if context=club use "{artist} club", "{artist} banger", "{artist} dance"
+                    if context=sad use "{artist} sad", "{artist} emotional", "{artist} heartbreak"
+                    if context=study use "{artist} chill", "{artist} focus", "{artist} low key"
+                    if energy=high use upbeat/hype queries
+                    if energy=low use mellow/slow queries
+
+            No full song titles. No feat. syntax. No artist: prefix.
+            Return ONLY a JSON array of 8 strings."""
         else:
-            prompt = f"""
-You are a music curator. Generate 9 diverse Spotify search queries to find non-mainstream, emotionally resonant tracks for:
-- Mood: {mood}
-- Context: {context}
-- Energy level: {energy}
-- Genre hint: {genre}
+            prompt = f"""Give 8 short Spotify search queries to find songs that match this vibe:
+            - Mood: {mood}
+            - Context: {context}
+            - Energy: {energy}
+            - Genre: {genre}
 
-Rules:
-- Explore adjacent subgenres, not just the obvious one
-- Mix underground artists with moderately known ones
-- Include different eras (90s/2000s/2010s/recent)
-- Vary the query format (artist names, mood phrases, genre combos)
-- Do NOT just repeat "{mood} {genre}" in every query
+            Tailor every query to the mood/context/energy above.
+            Examples: if context=club use "dance {genre}", "club {genre} banger", "party {genre} hits"
+                    if context=sad use "sad {genre}", "emotional {genre}", "heartbreak {genre}"
+                    if context=study use "focus {genre}", "chill {genre}", "lo-fi {genre}"
+                    if energy=high use upbeat/hype queries
+                    if energy=low use mellow/slow/ambient queries
 
-Return ONLY a JSON array of 9 query strings. No explanation.
-"""
+            Explore subgenres, mix eras, avoid only mainstream artists.
+            No artist: prefix. Short phrases only.
+            Return ONLY a JSON array of 8 strings."""
+
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="llama-3.1-8b-instant",
             messages=[
-                {"role": "system", "content": "Return only a JSON array of strings, nothing else."},
+                {"role": "system", "content": "Return only a JSON array of strings."},
                 {"role": "user",   "content": prompt}
             ],
-            temperature=0.8
+            temperature=0.8,
+            max_tokens=250,
         )
         raw     = response.choices[0].message.content
         raw     = re.sub(r"```(?:json)?\s*", "", raw).strip().replace("```", "").strip()
         queries = json.loads(raw)
         if isinstance(queries, list) and len(queries) >= 3:
-            if artist:
-                queries = [f"artist:{artist}"] + queries
-            return queries[:10]
+            queries = [q.replace("artist:", "").strip() for q in queries]
+            return queries[:8]
     except Exception:
         pass
 
-    # Fallback hardcoded
     if artist:
-        return [f"artist:{artist}", f"{artist}", f"{artist} {mood}",
-                f"{artist} {context}", f"{artist} deep cuts", f"{artist} b-sides"]
+        return [
+            f"{artist}",
+            f"{artist} hits",
+            f"{artist} {mood}",
+            f"{artist} {genre}",
+            f"{artist} {context}",
+            f"{artist} 2020",
+            f"{artist} best",
+            f"{artist} songs",
+        ]
     return [
-        f"{mood} {genre} {context}", f"{context} {genre} mix",
-        f"{mood} vibe {genre}", f"{genre} {energy} energy",
-        f"{context} playlist {genre}", f"{mood} underground {genre}",
-        f"indie {genre} {mood}", f"{mood} {genre} 2023", f"{genre} hidden gems",
+        f"{mood} {genre}",
+        f"{context} {genre}",
+        f"{mood} {genre} {context}",
+        f"{genre} {energy}",
+        f"{mood} vibes",
+        f"underground {genre} {mood}",
+        f"{genre} indie {mood}",
+        f"{context} {mood} music",
     ]
 
 
-# =============================================================================
-#  6. AUDIO FEATURE FETCHING  — cache + token bucket + retry
-# =============================================================================
-def fetch_audio_features_safe(track_ids: list, energy_level: str) -> dict:
+def fetch_audio_features_safe(track_ids, energy_level):
     global _feature_cache
     defaults     = DEFAULT_FEATURES[energy_level]
     features_map = {}
 
-    # Return cached entries immediately
     uncached = []
     for tid in track_ids:
         if tid in _feature_cache:
@@ -263,15 +254,12 @@ def fetch_audio_features_safe(track_ids: list, energy_level: str) -> dict:
         else:
             uncached.append(tid)
 
-    # Fetch uncached in batches of 3, no retries
-    for i in range(0, len(uncached), 3):
-        batch = uncached[i:i + 3]
-
+    for i in range(0, len(uncached), 20):
+        batch = uncached[i:i + 20]
         try:
-            spotify_bucket.acquire()
             fetched = sp.audio_features(batch)
         except Exception:
-            fetched = None  # silent fallback, no retry, no print
+            fetched = None
 
         result_list = fetched if fetched else [None] * len(batch)
         for tid, f in zip(batch, result_list):
@@ -287,15 +275,10 @@ def fetch_audio_features_safe(track_ids: list, energy_level: str) -> dict:
     return features_map
 
 
-# =============================================================================
-#  7. SCORING ENGINE  — returns (score, reasons) for explainability
-# =============================================================================
-def score_track(track: dict, mood: str, energy: str,
-                bpm_min: float, bpm_max: float):
+def score_track(track, mood, energy, bpm_min, bpm_max):
     score   = 0
     reasons = []
 
-    # BPM
     bpm       = track.get("bpm", 0)
     target    = (bpm_min + bpm_max) / 2
     bpm_score = max(0, 50 - abs(bpm - target))
@@ -305,7 +288,6 @@ def score_track(track: dict, mood: str, energy: str,
     elif bpm > 0:
         reasons.append(f"🎵 BPM: {int(bpm)}")
 
-    # Energy
     energy_val = track.get("energy", 0)
     if energy == "low":
         e_score = (1 - energy_val) * 20
@@ -318,7 +300,6 @@ def score_track(track: dict, mood: str, energy: str,
         if e_score > 14: reasons.append("🎯 Energy match")
     score += e_score
 
-    # Valence / mood
     valence = track.get("valence", 0)
     if mood in ("sad", "melancholy", "dark", "heartbreak"):
         v_score = (1 - valence) * 20
@@ -330,7 +311,6 @@ def score_track(track: dict, mood: str, energy: str,
         v_score = (1 - abs(0.5 - valence)) * 10
     score += v_score
 
-    # Popularity sweet spot
     popularity = track.get("popularity", 50)
     if 30 < popularity < 75:
         score += 15
@@ -344,9 +324,6 @@ def score_track(track: dict, mood: str, energy: str,
     return score, reasons
 
 
-# =============================================================================
-#  ROUTES
-# =============================================================================
 @app.route("/recommend", methods=["POST"])
 def recommend():
     try:
@@ -359,37 +336,36 @@ def recommend():
         context = parsed["context"]
         energy  = parsed["energy"]
 
-        # 5. LLM query expansion
         queries = expand_queries(parsed)
+        print(f"artist={artist} | queries={queries}")
         rnd.shuffle(queries)
-        queries = queries[:6]
 
         all_tracks = []
         seen_ids   = set()
 
         for query in queries:
-            for offset in [0, 10]:
-                try:
-                    spotify_bucket.acquire()
-                    results = sp.search(
-                        q=query, type="track",
-                        limit=10, offset=offset, market="IN"
-                    )
-                except Exception:
+            try:
+                spotify_bucket.acquire()
+                results = sp.search(
+                    q=query, type="track",
+                    limit=10, offset=0, market="IN"
+                )
+            except Exception:
+                continue
+
+            for track in results["tracks"]["items"]:
+                if track["id"] in seen_ids:
                     continue
-                for t in results["tracks"]["items"]:
-                    if t["id"] in seen_ids:
-                        continue
-                    if artist and not is_artist_track(t, artist):
-                        continue
-                    seen_ids.add(t["id"])
-                    all_tracks.append(t)
+                if artist and not is_artist_track(track, artist):
+                    continue
+                seen_ids.add(track["id"])
+                all_tracks.append(track)
 
         if not all_tracks:
-            return jsonify({"playlist": []})
+            return jsonify({"playlist": [], "mood": mood, "context": context, "energy": energy})
 
-        # 6. Audio features (cache-backed)
-        track_ids    = [t["id"] for t in all_tracks if t.get("id")]
+        all_tracks   = all_tracks[:50]
+        track_ids    = [tr["id"] for tr in all_tracks if tr.get("id")]
         features_map = fetch_audio_features_safe(track_ids, energy)
 
         bpm_min, bpm_max = BPM_RANGES[energy]
@@ -415,32 +391,29 @@ def recommend():
                 "valence":     f["valence"],
             }
 
-            # 7. Scoring + explainability reasons
             score, reasons   = score_track(entry, mood, energy, bpm_min, bpm_max)
             entry["score"]   = score
             entry["reasons"] = reasons
-
             raw_playlist.append(entry)
 
         if not raw_playlist:
-            return jsonify({"playlist": []})
+            return jsonify({"playlist": [], "mood": mood, "context": context, "energy": energy})
 
         ranked = sorted(raw_playlist, key=lambda x: x["score"], reverse=True)
 
         final        = []
         artists_seen = set()
-        for t in ranked:
-            if not artist and t["artist"] in artists_seen:
+        for track in ranked:
+            if not artist and track["artist"] in artists_seen:
                 continue
-            final.append(t)
-            artists_seen.add(t["artist"])
+            final.append(track)
+            artists_seen.add(track["artist"])
             if len(final) >= 20:
                 break
 
         if len(final) < 10:
             final = ranked[:20]
 
-        # 8. Save and return shareable ID
         playlist_id = str(uuid.uuid4())[:8]
         save_playlist(playlist_id, {
             "query": user_text, "mood": mood,
@@ -458,7 +431,6 @@ def recommend():
 
 @app.route("/playlist/<playlist_id>", methods=["GET"])
 def get_playlist(playlist_id):
-    """Retrieve a saved playlist by its share ID."""
     db   = load_playlists()
     data = db.get(playlist_id)
     if not data:
